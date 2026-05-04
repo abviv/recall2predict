@@ -1,13 +1,195 @@
-# Recall2Predict
+<p align="center">
+  <h1 align="center">Recall to Predict</h1>
+  <h3 align="center">Grounding Motion Forecasting in Interpretable Motion Bank</h3>
+  <p align="center">
+    <strong>CVPR 2026 Workshop</strong>
+  </p>
+  <p align="center">
+    <a href="https://github.com/abviv">Abhishek Vivekanandan</a><sup>1,2</sup> &nbsp;&middot;&nbsp;
+    Ahmed Abouelazm<sup>1</sup> &nbsp;&middot;&nbsp;
+    J. Marius Zöllner<sup>1,2</sup>
+  </p>
+  <p align="center">
+    <sup>1</sup>FZI Forschungszentrum Informatik &nbsp;&nbsp;
+    <sup>2</sup>Karlsruhe Institute of Technology (KIT)
+  </p>
+  <p align="center">
+    <a href="#"><img alt="Paper" src="https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv"></a>
+    <a href="#"><img alt="License" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
+    <a href="https://www.python.org/downloads/release/python-3100/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.8+-blue?logo=python&logoColor=white"></a>
+    <a href="https://pytorch.org/"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.4.1-ee4c2c?logo=pytorch&logoColor=white"></a>
+  </p>
+</p>
 
-Recall2Predict is an AV2 motion forecasting training pipeline built around
-trajectory-bank retrieval and a DETR-style refinement decoder. This public
-release is intentionally focused on the R2P AV2 Straight-Through Estimator based GQA training
-path.
+---
 
-## Repository Scope
+## Overview
 
-This repository contains the code and configs required to run:
+**Recall to Predict (R2P)** is an end-to-end differentiable motion forecasting framework that grounds predictions in a comprehensive *motion bank* — a structured embedding space of physically realizable trajectories constructed via contrastive learning.
+
+Rather than regressing paths from opaque latent queries, R2P dynamically retrieves explicit motion priors using a novel **Anchor Retrieval Layer**, preserving multi-modal diversity while exposing the model's intermediate reasoning.
+
+<p align="center">
+  <img src="docs/architecture.png" alt="R2P Architecture" width="90%">
+</p>
+
+### Key Contributions
+
+| Component | Description |
+|-----------|-------------|
+| **Motion Bank** | Pre-trained contrastive embedding space mapping physically realizable trajectories to structured latent vectors |
+| **Anchor Retrieval Layer** | Differentiable attention-based retrieval with Dual-Level Gated Cross-Attention and orthogonally initialized queries |
+| **Straight-Through Gumbel-Softmax** | Discrete trajectory selection in the forward pass with continuous gradient flow in the backward pass |
+| **DETR-style Decoder** | Iterative refinement decoder using retrieved anchors as interpretable queries |
+| **Multi-Objective Training** | WTA kinematic GMM + soft-min endpoint loss + latent diversity penalty |
+
+
+---
+
+## Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                         Recall to Predict (R2P)                        │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  ┌──────────────┐     ┌────────────────────┐     ┌──────────────────┐  │
+│  │ Input Proj.  │     │  Anchor Retrieval  │     │  Factorized Enc. │  │
+│  │  (PointNet)  │────▶│      Layer         │     │  (Self-Attn)     │  │
+│  └──────────────┘     │                    │     └────────┬─────────┘  │
+│                       │  Q_base (orthog.)  │              │            │
+│                       │       ↓            │              │            │
+│                       │  Dual-Level Gated  │              │            │
+│                       │  Cross-Attention   │              │            │
+│                       │       ↓            │              │            │
+│                       │  Cosine Similarity │              │            │
+│                       │  w/ Motion Bank    │              │            │
+│                       │       ↓            │              │            │
+│                       │  ST Gumbel-Softmax │              │            │
+│                       │       ↓            │              │            │
+│                       │  Anchor Tokens     │              │            │
+│                       └────────┬───────────┘              │            │
+│                                │                          │            │
+│                                ▼                          ▼            │
+│                       ┌────────────────────────────────────┐           │
+│                       │       DETR-style Decoder           │           │
+│                       │  (Cross-Attn: Target + Env)        │           │
+│                       └────────────────┬───────────────────┘           │
+│                                        │                               │
+│                        ┌───────────────┼───────────────┐               │
+│                        ▼               ▼               ▼               │
+│                   ┌─────────┐   ┌───────────┐   ┌──────────┐           │
+│                   │ Kin. GMM│   │Confidence │   │  Offset  │           │
+│                   │  Head   │   │   Head    │   │   Head   │           │
+│                   └─────────┘   └───────────┘   └──────────┘           │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.8+
+- CUDA 11.8+ (for GPU training)
+- Conda (recommended)
+
+### Installation
+
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/abviv/recall2predict.git
+cd recall2predict
+
+# If already cloned without --recursive
+git submodule update --init --recursive
+
+# Create environment
+conda env create -f environment.yml
+conda activate recall2predict
+
+# Install in editable mode (optional)
+pip install -e .
+```
+
+---
+
+## Dataset Setup
+
+<details>
+<summary><b>Argoverse 2 (AV2)</b></summary>
+
+```
+data/
+  av2/
+    processed_dataset/
+      training_new.h5
+      validation_new.h5
+      testing_new.h5
+      pre_trained_embeddings_new/
+        av2_bucketed_traj_embeddings_128x64_shuffled.pt
+```
+
+**Option A — Copy files:**
+```bash
+mkdir -p data/av2/processed_dataset
+cp /path/to/av2_processed/{training_new.h5,validation_new.h5,testing_new.h5} \
+  data/av2/processed_dataset/
+```
+
+**Option B — Symlink:**
+```bash
+mkdir -p data/av2
+ln -s /absolute/path/to/av2_processed data/av2/processed_dataset
+```
+
+</details>
+
+<details>
+<summary><b>Waymo Open Motion Dataset (WOMD)</b></summary>
+
+```
+data/
+  womd/
+    processed_dataset/
+      training.h5
+      validation.h5
+      testing.h5
+    pre_trained_embeddings/
+      womd_sdc_bucketed_traj_embeddings_96x96_shuffled-fixed-float32.pt
+```
+
+**Option A — Copy files:**
+```bash
+mkdir -p data/womd/processed_dataset data/womd/pre_trained_embeddings
+cp /path/to/womd_processed/{training.h5,validation.h5,testing.h5} \
+  data/womd/processed_dataset/
+cp /path/to/womd_embeddings/womd_sdc_bucketed_traj_embeddings_96x96_shuffled-fixed-float32.pt \
+  data/womd/pre_trained_embeddings/
+```
+
+**Option B — Symlink:**
+```bash
+mkdir -p data/womd
+ln -s /absolute/path/to/womd_processed data/womd/processed_dataset
+ln -s /absolute/path/to/womd_pre_trained_embeddings data/womd/pre_trained_embeddings
+```
+
+**Option C — Environment variables:**
+```bash
+export R2P_WOMD_DATA_DIR=/absolute/path/to/womd_processed
+export R2P_WOMD_PRETRAINED_EMB_PATH=/absolute/path/to/womd_embedding.pt
+```
+
+</details>
+
+---
+
+## Training
+
+### AV2 — Straight-Through GQA
 
 ```bash
 python src/train.py experiment=ablations/r2p_av2_st_gqa \
@@ -21,139 +203,18 @@ python src/train.py experiment=ablations/r2p_av2_st_gqa \
   trainer.log_every_n_steps=10
 ```
 
-The bundled trajectory embedding bank is:
-
-```text
-data/av2/processed_dataset/pre_trained_embeddings_new/av2_bucketed_traj_embeddings_128x64_shuffled.pt
-```
-
-## Dataset Layout
-
-Dataset HDF5 files are not bundled. The public repo keeps the same
-project-root layout used by the development repo.
-
-For AV2:
-
-```text
-data/
-  av2/
-    processed_dataset/
-      training_new.h5
-      validation_new.h5
-      testing_new.h5
-      pre_trained_embeddings_new/
-        av2_bucketed_traj_embeddings_128x64_shuffled.pt
-```
-
-The selected config is `configs/datamodule/h5_av2_noraster.yaml`, so raster
-HDF5 files are not required for the default Recall2Predict command.
-
-You can either copy the AV2 HDF5 files into the existing directory:
-
-```bash
-mkdir -p data/av2/processed_dataset
-cp /path/to/av2_processed/{training_new.h5,validation_new.h5,testing_new.h5} \
-  data/av2/processed_dataset/
-```
-
-Or mirror the original development setup with a symlink:
-
-```bash
-mkdir -p data/av2
-ln -s /absolute/path/to/av2_processed data/av2/processed_dataset
-```
-
-If you use the symlink option, make sure the symlink target also contains
-`pre_trained_embeddings_new/av2_bucketed_traj_embeddings_128x64_shuffled.pt`,
-or pass `model.pretrained_emb_path=/path/to/the/embedding.pt` on the command
-line.
-
-For WOMD configs:
-
-```text
-data/
-  womd/
-    processed_dataset/
-      training.h5
-      validation.h5
-      testing.h5
-    pre_trained_embeddings/
-      womd_sdc_bucketed_traj_embeddings_96x96_shuffled-fixed-float32.pt
-```
-
-The included WOMD experiment configs use `configs/datamodule/h5_womd_noraster.yaml`,
-so raster HDF5 files are not required unless you switch to `h5_womd`.
-
-You can copy the WOMD HDF5 files into the repo layout:
-
-```bash
-mkdir -p data/womd/processed_dataset data/womd/pre_trained_embeddings
-cp /path/to/womd_processed/{training.h5,validation.h5,testing.h5} \
-  data/womd/processed_dataset/
-cp /path/to/womd_embeddings/womd_sdc_bucketed_traj_embeddings_96x96_shuffled-fixed-float32.pt \
-  data/womd/pre_trained_embeddings/
-```
-
-Or mirror the development setup with symlinks:
-
-```bash
-mkdir -p data/womd
-ln -s /absolute/path/to/womd_processed data/womd/processed_dataset
-ln -s /absolute/path/to/womd_pre_trained_embeddings data/womd/pre_trained_embeddings
-```
-
-The WOMD configs can also be pointed elsewhere without editing YAML:
-
-```bash
-export R2P_WOMD_DATA_DIR=/absolute/path/to/womd_processed
-export R2P_WOMD_PRETRAINED_EMB_PATH=/absolute/path/to/womd_embedding.pt
-```
-
-## Setup
-
-Clone the repository with its submodule:
-
-```bash
-git clone --recursive git@github.com:abviv/recall2predict.git
-cd recall2predict
-```
-
-If you already cloned without `--recursive`, initialize the required
-`layers_in_my_way` submodule before running tests or training:
-
-```bash
-git submodule update --init --recursive
-```
-
-Create the conda environment:
-
-```bash
-conda env create -f environment.yml
-conda activate recall2predict
-```
-
-Install the package in editable mode if you want console entrypoints:
-
-```bash
-pip install -e .
-```
-
-## Verify Configuration
-
-You can inspect the fully composed Hydra config without starting training:
+### Verify Configuration (dry run)
 
 ```bash
 python src/train.py experiment=ablations/r2p_av2_st_gqa \
   datamodule.batch_size=8 \
   model.pretrained_emb_path=data/av2/processed_dataset/pre_trained_embeddings_new/av2_bucketed_traj_embeddings_128x64_shuffled.pt \
   trainer.max_epochs=20 \
-  trainer.limit_train_batches=0.001 \
-  trainer.limit_val_batches=0.001 \
   datamodule.data_dir=data/av2/processed_dataset \
-  logger.wandb.project=debug \
-  trainer.log_every_n_steps=10 \
   --cfg job
 ```
+
+---
 
 ## Tests
 
@@ -161,9 +222,86 @@ python src/train.py experiment=ablations/r2p_av2_st_gqa \
 python -m pytest -q tests/test_ac_model_R2P_gqa_scaling.py tests/test_trajectory_selector_softattn_tf.py
 ```
 
-## Third-Party Code
+---
 
-This release includes selected HPTR-derived utilities and the
-`src/layers_in_my_way` Git submodule needed by the R2P path. See
-`THIRD_PARTY_NOTICES.md` for license details. The root MIT license applies to
-the original Recall2Predict code only.
+## Method Summary
+
+<details>
+<summary><b>Pre-trained Motion Bank</b></summary>
+
+A structured embedding space of prototypical driving behaviors, built via contrastive learning. Each trajectory maps 1-to-1 to a semantically meaningful latent vector. The bank provides physically realizable motion priors that eliminate the need to regress paths from scratch.
+
+</details>
+
+<details>
+<summary><b>Anchor Retrieval Layer</b></summary>
+
+Orthogonally initialized queries attend to heterogeneous scene context via **Dual-Level Gated Cross-Attention**:
+- **Micro-Level:** Per-query sigmoid gates control context absorption
+- **Macro-Level:** Global softmax with learnable null-sink routes attention across modalities
+
+Discrete selection is performed via Straight-Through Gumbel-Softmax — hard argmax forward, soft gradient backward.
+
+</details>
+
+<details>
+<summary><b>Iterative Refinement Decoder</b></summary>
+
+A DETR-style decoder that uses retrieved anchor tokens directly as queries (not learned from scratch). The decoder attends sequentially to the focal agent token and environment context. An offset head on the *pre-decoder* anchors prevents the decoder from compensating for poor retrieval.
+
+</details>
+
+<details>
+<summary><b>Training Objectives</b></summary>
+
+$$\mathcal{L}_{\text{total}} = \lambda_{\text{motion}}\,\mathcal{L}_{\text{motion}} + 0.1\,\mathcal{L}_{\text{endpoint}} + \mathcal{L}_{\text{div}}$$
+
+- **WTA Kinematic Loss:** NLL + velocity Huber + heading cosine + confidence CE (only winning mode)
+- **Dual-Objective Endpoint Loss:** Soft-min weighted Huber on anchor + offset endpoints
+- **Latent Diversity Loss:** Frobenius-norm penalty on query cosine similarity vs. identity
+
+</details>
+
+---
+
+## Project Structure
+
+```
+recall2predict/
+├── configs/                  # Hydra experiment configs
+│   ├── datamodule/           # Dataset configurations
+│   └── experiment/           # Training experiments
+├── src/
+│   ├── train.py              # Main training entrypoint
+│   ├── models/               # Model architectures
+│   ├── datamodules/          # Data loading & preprocessing
+│   └── layers_in_my_way/     # Git submodule (third-party layers)
+├── tests/                    # Unit tests
+├── data/                     # Dataset root (not tracked)
+└── environment.yml           # Conda environment specification
+```
+
+---
+
+## Citation
+
+```bibtex
+@inproceedings{vivekanandan2026recall,
+  title={Recall to Predict: Grounding Motion Forecasting in Interpretable Motion Bank},
+  author={Vivekanandan, Abhishek and Abouelazm, Ahmed and Z{\"o}llner, J. Marius},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)},
+  year={2026}
+}
+```
+
+---
+
+## Acknowledgements
+
+This work was supported by the Helmholtz Association's Initiative and Networking Fund. Third-party code attributions are documented in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+---
+
+## License
+
+This project is licensed under the MIT License — see [`LICENSE`](LICENSE) for details. The MIT license applies to original Recall2Predict code only; bundled third-party components retain their respective licenses.

@@ -1,0 +1,12 @@
+wandb:
+  _target_: pytorch_lightning.loggers.WandbLogger
+  project: debug
+  group: null
+  name: null
+  notes: null
+  tags: []
+  job_type: train
+  entity: null
+  log_model: false
+  id: null # Need to pass this explicitly if you want to resume.
+  resume: allow

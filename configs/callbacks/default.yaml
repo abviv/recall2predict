@@ -1,0 +1,24 @@
+defaults:
+  - early_stopping
+  - model_summary
+  - rich_progress_bar
+  - wandb
+  - _self_
+
+# model_checkpoint:
+#   dirpath: ${paths.output_dir}/checkpoints
+#   filename: "epoch_{epoch:03d}"
+#   monitor: "val/acc"
+#   mode: "max"
+#   save_last: True
+#   auto_insert_metric_name: False
+
+early_stopping:
+  monitor: "waymo_pred/brier_minFDE" # need to use "min"
+  # monitor: "waymo_pred/mean_average_precision" # need to use "max"
+  # monitor: "val_train/loss" # need to use "min"
+  patience: 20
+  mode: "min"
+
+model_summary:
+  max_depth: -1

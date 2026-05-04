@@ -1,0 +1,12 @@
+_target_: HPTR.src.data_modules.data_h5_womd.DataH5womd
+
+data_dir: "data/womd/processed_dataset/"
+filename_train: training
+filename_val: validation
+filename_test: testing
+filename_train_raster: null
+filename_val_raster: null
+
+n_agent: 64
+batch_size: 4
+num_workers: 8

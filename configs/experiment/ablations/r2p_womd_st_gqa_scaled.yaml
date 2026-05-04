@@ -1,0 +1,88 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - override /datamodule: h5_womd_noraster
+  - override /model: ac_R2P_womd
+  - override /callbacks: default
+  - override /logger: wandb
+  - override /trainer: juwels_ddp
+
+tags:
+  - womd
+  - r2p_gqa
+  - straight_through
+  - use_gqa=False
+  - use_target_context=True
+  - use_other_context=True
+  - n_anchor=6
+  - n_pred=6
+  - weight_decay=1e-2
+
+datamodule:
+  data_dir: ${oc.env:R2P_WOMD_DATA_DIR,data/womd/processed_dataset}
+  batch_size: 32
+
+trainer:
+  max_epochs: 90
+  check_val_every_n_epoch: 1
+  log_every_n_steps: 100
+  limit_train_batches: 0.8
+  limit_val_batches: 1.0
+
+model:
+  pretrained_emb_path: ${oc.env:R2P_WOMD_PRETRAINED_EMB_PATH,data/womd/pre_trained_embeddings/womd_sdc_bucketed_traj_embeddings_96x96_shuffled-fixed-float32.pt}
+  plot_motion: False
+  plot_anchor_selection: False
+  plot_motion_focal_track: False
+  pre_processing:
+    agent_centric:
+      n_map: 256
+      n_other: 48
+  model:
+    _target_: src.models.ac_model_R2P_gqa.BoundaryAware
+    early_fusion_encoder:
+      agent_attn_depth: 4
+      lane_attn_depth: 4
+      r2p_attn_depth: 4
+      anchor_attn_depth: 4
+      d_feedforward: 768
+    trajectory_selector:
+      n_latent_anchors: 6
+      use_straight_through: True
+      use_gqa: False
+      use_gating: True
+      lambda_gqa_entropy: 0.1
+      contexts:
+        use_target: True
+        use_other: True
+        use_map: False
+    motion_decoder:
+      n_pred: 6
+      mlp_head_num_heads: 1
+      n_refinement_layer: 3
+      mlp_head_cfg:
+        use_agent_type: False
+      tf_cfg:
+        d_feedforward: 768
+  lr_scheduler:
+    max_lr: 2e-4
+    pct_start: 0.15
+    div_factor: 5.0
+    final_div_factor: 10.0
+  optimizer:
+    weight_decay: 1e-3
+  train_metric:
+    lambda_anchor_endpoint: 0.1
+    lambda_anchor_as_traj: 0.1
+
+logger:
+  wandb:
+    entity: null
+    project: recall2predict-womd
+    group: r2p_womd_ablations
+    tags: ${tags}
+    notes: >-
+      Recall2Predict WOMD scaled STE run with 6 anchors,
+      6 predictions, wider FFNs, deeper scene fusion, deeper anchor
+      self-attention, and 3 decoder refinement layers.

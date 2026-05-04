@@ -1,0 +1,84 @@
+# @package _global_
+# Ablation: disable Straight-Through estimator, use soft attention weights.
+# Tests whether discrete (hard) selection via ST is critical vs soft retrieval.
+
+defaults:
+  - _self_
+  - override /datamodule: h5_womd_noraster
+  - override /model: ac_R2P_womd
+  - override /callbacks: default
+  - override /logger: wandb
+  - override /trainer: juwels_ddp
+
+tags:
+  - womd
+  - r2p_gqa
+  - ablation
+  - soft_retrieval
+  - use_target_context_only=True
+  - use_gqa=True
+  - gqa_lambda_entropy_0.05
+  - n_anchor=32
+  - n_pred=6
+  - weight_decay=1e-2
+
+datamodule:
+  data_dir: ${oc.env:R2P_WOMD_DATA_DIR,data/womd/processed_dataset}
+  batch_size: 32
+
+trainer:
+  max_epochs: 90
+  check_val_every_n_epoch: 1
+  log_every_n_steps: 100
+  limit_train_batches: 1.0
+  limit_val_batches: 1.0
+
+model:
+  pretrained_emb_path: ${oc.env:R2P_WOMD_PRETRAINED_EMB_PATH,data/womd/pre_trained_embeddings/womd_sdc_bucketed_traj_embeddings_96x96_shuffled-fixed-float32.pt}
+  plot_motion: False
+  plot_anchor_selection: False
+  plot_motion_focal_track: False
+  pre_processing:
+    agent_centric:
+      n_map: 256
+      n_other: 32
+  model:
+    _target_: src.models.ac_model_R2P_gqa.BoundaryAware
+    trajectory_selector:
+      n_latent_anchors: 32
+      use_straight_through: false
+      use_gqa: True
+      use_gating: True
+      lambda_gqa_entropy: 0.05
+      contexts:
+        use_target: False
+        use_other: False
+        use_map: False
+    motion_decoder:
+      n_pred: 6
+      mlp_head_num_heads: 1
+      n_refinement_layer: 1
+      mlp_head_cfg:
+        use_agent_type: False
+      tf_cfg:
+        d_feedforward: 512
+  lr_scheduler:
+    max_lr: 2e-3
+    pct_start: 0.25
+    div_factor: 20.0
+    final_div_factor: 50.0
+  optimizer:
+    weight_decay: 1e-2
+  train_metric:
+    lambda_anchor_endpoint: 0.1
+    lambda_anchor_as_traj: 0.1
+
+logger:
+  wandb:
+    entity: null
+    project: recall2predict-womd
+    group: r2p_womd_ablations
+    tags: ${tags}
+    notes: >-
+      Recall2Predict WOMD soft-retrieval GQA run with straight-through
+      selection disabled, 32 retrieved anchors, and 6 decoder predictions.

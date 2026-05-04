@@ -1,0 +1,87 @@
+defaults:
+  - ac_baware_av2_base
+  - _self_
+
+time_step_current: 10
+time_step_end: 90
+plot_endpoints: False
+
+pretrained_emb_path: null
+
+model:
+  _target_: src.models.ac_model_R2P_gqa.BoundaryAware
+  encoder_init_from:
+    activate: False
+    path: null
+    from_lightning: true
+    modules: [encoder, local_projections, trajectory_selector]
+    strict: false
+  freeze_modules: []
+  early_fusion_encoder:
+    agent_attn_depth: 2
+    lane_attn_depth: 2
+    r2p_attn_depth: 2
+    anchor_attn_depth: 2
+  local_encoder:
+    add_learned_pe: True
+    use_point_net: True
+    n_layer_mlp: 3
+    mlp_cfg:
+      end_layer_activation: False
+      use_layernorm: True
+      use_batchnorm: False
+      dropout_p: 0.15
+  trajectory_selector:
+    use_traj_projection: True
+    n_latent_anchors: 32
+    hidden_dim: 256
+    subset_percentage: -1
+    use_layer: "softattn"
+    selection_mode: "full"
+    retrieval_mode: "endpoint_rerank"
+    endpoint_topM: ${..trajectory_selector.n_latent_anchors}
+    use_gqa: True
+    lambda_gqa_entropy: 0.05   # set > 0 to enable entropy
+    contexts:
+      use_target: True
+      use_other: True
+      use_map: False
+  motion_decoder:
+    # === Prediction Head ===
+    # n_pred: total mode queries produced by the decoder
+    # mlp_head_num_heads: how many non-parameter-shared heads to split them across
+    #
+    # Examples:
+    #   n_pred: 6,  mlp_head_num_heads: 1  -> single head, 6 predictions
+    #   n_pred: 18, mlp_head_num_heads: 1  -> single head, 18 predictions
+    #   n_pred: 18, mlp_head_num_heads: 3  -> ensemble: 3 heads x 6 modes, random sampling
+    n_pred: 6
+    mlp_head_num_heads: 1
+
+    # controlling the decoder where the 
+    n_refinement_layer: 1
+    use_offset_prediction: true
+    offset_dropout_p: 0.2
+    use_anchors_as_queries: True
+    # Required by main.py post-processing (not used by R2P model)
+    use_classification_head: false
+    use_classification_tower_head: false
+
+    mlp_head_cfg:
+      n_step_future: 80
+
+train_metric:
+  _target_: src.models.metrics.nll_detr.NllMetrics
+  w_anchor_diversity: [0.7, 0.7, 0.7]
+  n_anchor_proposals: ${...model.model.trajectory_selector.n_latent_anchors}
+  offset_huber_delta: 1.0
+  offset_regularization_lambda: 0.1
+  conf_label_smoothing: 0.1
+  lambda_anchor_endpoint: 0.1
+  lambda_anchor_as_traj: 1.0
+  lambda_others: 1.0          # enable other-agent displacement loss
+  raster_beta_m: 1.0
+
+w_scheduler:
+  start_epoch: -1
+  base_w_conf: [0.5, 0.5, 0.5]

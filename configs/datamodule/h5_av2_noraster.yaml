@@ -1,0 +1,12 @@
+_target_: HPTR.src.data_modules.data_h5_av2.DataH5av2
+
+data_dir: "data/av2/processed_dataset"
+filename_train: training_new
+filename_val: validation_new
+filename_test: testing_new
+filename_train_raster: null
+filename_val_raster: null
+n_agent: 64
+
+batch_size: 4
+num_workers: 8

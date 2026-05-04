@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.coverage*
+htmlcov/
+
+# Environments and local config
+.env
+.venv/
+venv/
+env/
+configs/local/default.yaml
+
+# Training artifacts
+checkpoints/
+logs/
+outputs/
+wandb/
+plots/
+notebooks/
+
+# Data: keep datasets out of Git, except the packaged demo embedding bank.
+data/*
+!data/av2/
+data/av2/*
+!data/av2/processed_dataset/
+data/av2/processed_dataset/*
+!data/av2/processed_dataset/pre_trained_embeddings_new/
+data/av2/processed_dataset/pre_trained_embeddings_new/*
+!data/av2/processed_dataset/pre_trained_embeddings_new/av2_bucketed_traj_embeddings_128x64_shuffled.pt
+
+# Editors
+.vscode/
+.idea/
+*.code-workspace

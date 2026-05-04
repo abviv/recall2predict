@@ -1,0 +1,20 @@
+timed_checkpoint:
+  _target_: src.callbacks.checkpoint_callbacks.TimedCheckpointCallback
+  monitor: "waymo_pred/brier_minFDE"
+  mode: "min"
+  save_last: true
+  save_top_k: 5
+  save_only_best: false
+  sync_to_wandb: true
+  root_dir: checkpoints/
+  filename: "epoch_{epoch:03d}"
+  auto_insert_metric_name: false
+
+lr_monitor:
+  _target_: pytorch_lightning.callbacks.LearningRateMonitor
+
+watch_model:
+  _target_: src.callbacks.checkpoint_callbacks.WatchModel
+  log: "gradients"
+  log_freq: 100
+  log_graph: True 

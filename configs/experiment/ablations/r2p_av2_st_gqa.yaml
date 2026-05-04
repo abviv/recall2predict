@@ -1,0 +1,82 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - override /datamodule: h5_av2_noraster
+  - override /model: ac_R2P_av2
+  - override /callbacks: default
+  - override /logger: wandb
+  - override /trainer: juwels_ddp
+
+tags:
+  - av2
+  - r2p_gqa
+  - ablation
+  - straight_through
+  - n_anchor=6
+  - n_pred=6
+  - approx_16m
+  - weight_decay=1e-2
+
+datamodule:
+  data_dir: data/av2/processed_dataset
+  batch_size: 32
+
+trainer:
+  max_epochs: 90
+  check_val_every_n_epoch: 1
+  log_every_n_steps: 100
+  limit_train_batches: 1.0
+  limit_val_batches: 1.0
+
+model:
+  pretrained_emb_path: data/av2/processed_dataset/pre_trained_embeddings_new/av2_bucketed_traj_embeddings_128x64_shuffled.pt
+  plot_motion: False
+  plot_anchor_selection: False
+  plot_motion_focal_track: False
+  pre_processing:
+    agent_centric:
+      n_map: 256
+      n_other: 32
+  model:
+    _target_: src.models.ac_model_R2P_gqa.BoundaryAware
+    early_fusion_encoder:
+      d_feedforward: 256
+    trajectory_selector:
+      n_latent_anchors: 6
+      use_straight_through: True
+      use_gqa: False
+      use_gating: True
+      lambda_gqa_entropy: 0.1
+      contexts:
+        use_target: True
+        use_other: True
+        use_map: False
+    motion_decoder:
+      n_pred: 6
+      mlp_head_num_heads: 1
+      n_refinement_layer: 1
+      mlp_head_cfg:
+        use_agent_type: False
+      tf_cfg:
+        d_feedforward: 256
+  lr_scheduler:
+    max_lr: 1e-3
+    pct_start: 0.15
+    div_factor: 5.0
+    final_div_factor: 10.0
+  optimizer:
+    weight_decay: 1e-2
+  train_metric:
+    lambda_anchor_endpoint: 0.1
+    lambda_anchor_as_traj: 0.1
+
+logger:
+  wandb:
+    entity: null
+    project: recall2predict
+    group: r2p_av2_ablations
+    tags: ${tags}
+    notes: >-
+      Recall2Predict AV2 with straight-through selection, 6 retrieved anchors,
+      and 6 decoder predictions.

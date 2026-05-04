@@ -1,0 +1,165 @@
+_target_: main.FutureMotion
+
+time_step_current: 49
+time_step_end: 109
+n_video_batch: 3
+interactive_challenge: False
+inference_cache_map: False
+inference_repeat_n: 1
+pretrained_emb_path: null # point to your pre_trained_embeddings.pt if any
+
+# plot options
+plot_motion: False
+plot_motion_focal_track: False
+plot_probmap: False
+plot_anchor_selection: False
+
+model:
+  _target_: models.ac_boundary_aware_v3_DETR.BoundaryAware
+  hidden_dim: 256
+  n_decoders: 1
+  use_encoder: True
+  tf_cfg: # general transformer config
+    n_head: 8
+    dropout_p: 0.25
+    norm_first: True
+    bias: False
+  local_encoder: # input projections
+    add_learned_pe: True
+    use_point_net: True
+    n_layer_mlp: 3
+    mlp_cfg:
+      end_layer_activation: True
+      use_layernorm: True
+      use_batchnorm: False
+      dropout_p: 0.25
+  early_fusion_encoder: # encoder
+    n_latent_query: 193
+    n_encoder_layers: 6
+    use_shared_tf_encoder: False # True: (cross + self) * n, False: cross + self * n
+    latent_query:
+        use_agent_type: False
+        mode_emb: none # linear, mlp, add, none
+        mode_init: xavier # uniform, xavier
+        scale: 5.0
+  motion_decoder: # Combined Decoder
+    hidden_dim: 512
+    n_pred: 6
+    use_vmap: False
+    mlp_head_cfg:
+      predictions: [pos, cov3, vel, yaw_bbox] # [pos, cov3, vel, yaw_bbox, spd]
+      use_agent_type: True
+      n_step_future: 60
+      out_mlp_layernorm: True
+      out_mlp_batchnorm: False
+      add_residual: True
+    multi_modal_anchors_cfg:
+      use_agent_type: False
+      mode_emb: none
+      mode_init: xavier
+      scale: 5.0
+    tf_cfg:
+      n_head: 8
+      dropout_p: 0.25
+      norm_first: True
+      bias: False
+      d_feedforward: 512
+      n_layer: 4
+
+train_metric:
+  _target_: HPTR.src.models.metrics.nll_towers.NllMetrics
+  winner_takes_all: hard1
+  l_pos: nll_torch
+  p_rand_train_agent: -1
+  n_step_add_train_agent: [-1, -1, -1]
+  focal_gamma_conf: [0.0, 0.0, 0.0]
+  w_conf: [1.0, 1.0, 1.0] # vehicle, pedestrian, cyclist 1.0 means equal weight
+  w_pos: [1.0, 1.0, 1.0]
+  w_yaw: [1.0, 1.0, 1.0]
+  w_vel: [1.0, 1.0, 1.0]
+  w_spd: [0.0, 0.0, 0.0]
+  w_raster: [0.0, 0.0, 0.0]
+  w_anchor_selection: [1.0, 1.0, 1.0]
+  visualize_probmap: False # True only in debug mode
+  visualize_anchor_selection: False # True only in debug mode
+  lambda_motion: 1.0
+  lambda_raster: 0.0
+  lambda_anchor: 1.0
+  lambda_endpoint: 1.0
+  
+waymo_metric:
+  _target_: HPTR.src.models.metrics.waymo.WaymoMetrics
+  n_max_pred_agent: 8
+
+pre_processing:
+  agent_centric:
+    _target_: HPTR.src.data_modules.agent_centric.AgentCentricPreProcessing
+    mask_invalid: True
+    n_target: 8
+    n_other: 48
+    n_map: 128
+    n_tl: 1
+    visualize_world_data: False # True only in debug mode
+  ac_global:
+    _target_: models.data_alignment.ac_scene_motion.AgentCentricSceneMotion
+    dropout_p_history: 0.10
+    use_current_tl: False
+    add_ohe: True
+    pl_aggr: False
+    pose_pe:
+      agent: xy_dir
+      map: xy_dir # mpa_pl for more elaborate extraction
+      tl: mpa_pl
+  raster:
+    _target_: models.data_alignment.raster_pre_processing.RasterPreProcessing
+    n_target: 8
+    n_other: 48
+    n_map: ${model.pre_processing.agent_centric.n_map}
+
+post_processing:
+  to_dict:
+    _target_: HPTR.src.data_modules.post_processing.ToDict
+    predictions: ${...model.motion_decoder.mlp_head_cfg.predictions}
+  get_cov_mat:
+    _target_: HPTR.src.data_modules.post_processing.GetCovMat
+    rho_clamp: 5.0
+    std_min: -1.609
+    std_max: 5.0
+  waymo:
+    _target_: HPTR.src.data_modules.waymo_post_processing.WaymoPostProcessing
+    k_pred: 6
+    use_ade: True
+    score_temperature: 0.5
+    mpa_nms_thresh: [] #[2.5, 1.0, 2.0]
+    mtr_nms_thresh: [2.0, 1.0, 2.0]
+    gt_in_local: True
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 3e-4
+  weight_decay: 0.01
+# lr_scheduler:
+#   _target_: torch.optim.lr_scheduler.StepLR
+#   gamma: 0.5
+#   step_size: 20
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  max_lr: 3e-4
+  pct_start: 0.2
+  anneal_strategy: 'cos'
+  cycle_momentum: False
+  div_factor: 25
+  final_div_factor: 1000.0
+
+sub_womd:
+  _target_: HPTR.src.utils.submission.SubWOMD
+  activate: False
+  method_name: METHOD_NAME
+  authors: [NAME1, NAME2]
+  affiliation: AFFILIATION
+  description: scr_womd
+  method_link: METHOD_LINK
+  account_name: ACCOUNT_NAME
+sub_av2:
+  _target_: HPTR.src.utils.submission.SubAV2
+  activate: False 

@@ -11,7 +11,7 @@
     <sup>2</sup>Karlsruhe Institute of Technology (KIT)
   </p>
   <p align="center">
-    <a href="#"><img alt="Paper" src="https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv"></a>
+    <a href="https://arxiv.org/abs/2605.01393"><img alt="Paper" src="https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv"></a>
     <a href="#"><img alt="License" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
     <a href="https://www.python.org/downloads/release/python-380/"><img alt="Python 3.8+" src="https://img.shields.io/badge/Python-3.8+-blue?logo=python&logoColor=white"></a>
     <a href="https://pytorch.org/"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.4.1-ee4c2c?logo=pytorch&logoColor=white"></a>

@@ -295,10 +295,5 @@ recall2predict/
 
 ## Acknowledgements
 
-This work was supported by the Helmholtz Association's Initiative and Networking Fund. Third-party code attributions are documented in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+This work was built upon the wonderful contributions of [HPTR](https://github.com/zhejz/HPTR), [Future-Motion](https://github.com/kit-mrt/future-motion)
 
----
-
-## License
-
-This project is licensed under the MIT License — see [`LICENSE`](LICENSE) for details. The MIT license applies to original Recall2Predict code only; bundled third-party components retain their respective licenses.
